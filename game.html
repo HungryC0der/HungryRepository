@@ -89,15 +89,15 @@
         const W=canvas.width, H=canvas.height, wall=550, keys=new Set(), bullets=[], trails=[], effects=[], cannons=[];
         const MAX_BULLETS=100, MAX_TRAILS=90, MAX_EFFECTS=100;
         let last=performance.now(), running=false, shake=0, camera={x:W/2,y:H/2,zoom:1};
+        
+        // 요구하신 능력 이름 반영 (근접, 초월, 포격)
         const abilities={
-            melee:{name:'근접',color:'#f7e36b',description:'5초 동안 무적 및 근접 공격 능력을 얻습니다.'},
-            transcendence:{name:'초월',color:'#ff5ce1',description:'5초 동안 캐릭터가 강력해집니다.'},
-            炮격:{name:'포격',color:'#ff9f43',description:'체력이 있는 대포를 설치합니다.'},
-            sniper:{name:'명사수',color:'#b78cff',description:'조준모드로 전환하여 적을 정확히 조준시 50 데미지를 입힙니다.'},
-            dash:{name:'돌진',color:'#58a6ff',description:'시전 후 각도 조절, 돌진할 수 있습니다.'}
+            melee:{name:'근접',color:'#f7e36b',description:'5초 동안 근접 공격 능력을 얻습니다.'},
+            transcendence:{name:'초월',color:'#ff5ce1',description:'5초 동안 가속, 관통, 총알 피해 10.'},
+            cannon:{name:'포격',color:'#ff9f43',description:'위치에 10초간 포격을 설치해 자동 발사합니다.'},
+            sniper:{name:'명사수',color:'#b78cff',description:'투명화, 확대 조준. 정확히 맞추면 50 피해.'},
+            dash:{name:'돌진',color:'#58a6ff',description:'시전 후 각도 조절, 돌진 중 무적 및 데미지 20 (쿨타임 20초)'}
         };
-        // 내부 키 매핑용 치환
-        abilities.cannon = abilities.炮격;
 
         const players={p1:{x:150,y:H/2,color:'#ff734d',baseColor:'#ff734d',hp:100,fire:'c',ult:'v',controls:['a','d','w','s'],dir:1,ability:null},p2:{x:W-150,y:H/2,color:'#55d6ce',baseColor:'#55d6ce',hp:100,fire:'=',ult:'\\',controls:['l',"'",'p',';'],dir:-1,ability:null}};
         const selectionIndex={p1:0,p2:0};
@@ -106,11 +106,10 @@
         function makePickers(){
             const box=document.querySelector('.ability-list');
             for(const [key,a] of Object.entries(abilities)){
-                if(key==='cannon') continue; // 중복 방지
                 const button=document.createElement('button');
                 button.className='ability';
                 button.dataset.ability=key;
-                button.innerHTML=`<i class="ability-icon">${key==='melee'?'◇':key==='transcendence'?'ϟ':key==='炮격'?'▰':key==='sniper'?'⊙':'➜'}</i><strong>${a.name}</strong><span>${a.description}</span><em class="selection-tag p1">P1</em><em class="selection-tag p2">P2</em>`;
+                button.innerHTML=`<i class="ability-icon">${key==='melee'?'◇':key==='transcendence'?'ϟ':key==='cannon'?'▰':key==='sniper'?'⊙':'➜'}</i><strong>${a.name}</strong><span>${a.description}</span><em class="selection-tag p1">P1</em><em class="selection-tag p2">P2</em>`;
                 box.appendChild(button);
             }
             selectAbility('p1',0);selectAbility('p2',0);
@@ -128,19 +127,18 @@
         
         function activate(p){
             if(p.special||p.ultCooldown>0)return;
-            p.ultCooldown=p.ability==='炮격'?20:(p.ability==='dash'?20:10);
+            p.ultCooldown=p.ability==='cannon'?20:(p.ability==='dash'?20:10);
             p.color=abilities[p.ability].color;
             updateHealth();
             if(p.ability==='melee'||p.ability==='transcendence'){
                 p.special={type:p.ability,time:5};
-            }else if(p.ability==='炮격'){
+            }else if(p.ability==='cannon'){
                 cannons.push({x:p.x,y:p.y,owner:p,hp:50,lastShot:0,life:10});
-                p.special={type:'炮격',time:10};
+                p.special={type:'cannon',time:10};
             }else if(p.ability==='sniper'){
                 p.special={type:'sniper',time:5,ready:.5,alpha:1,zoom:1,cameraX:players[p===players.p1?'p2':'p1'].x,cameraY:players[p===players.p1?'p2':'p1'].y};
             }else if(p.ability==='dash'){
                 const startSide = (p === players.p1) ? 'left' : 'right';
-                // 조준 단계(aim): 이때는 데미지를 받음
                 p.special={type:'dash',phase:'aim',time:5,elapsed:0,angle:p.dir>0?0:Math.PI,x:p.x,y:p.y,vx:0,vy:0,hitCooldown:0, startSide: startSide, hasCrossedCenter: false};
             }
             effects.push({type:'burst',x:p.x,y:p.y,color:p.color,life:.5,maxLife:.5});
@@ -166,7 +164,6 @@
         }
 
         function hit(b,p){
-            // 돌진 중(charging)일 때는 무적 처리 (데미지 받지 않음)
             if(p.special?.type==='dash' && p.special.phase==='charging'){
                 b.x=b.dir===1?W+100:-100;
                 return false;
@@ -194,7 +191,6 @@
         shoot=(p,now)=>{
             if(p.special?.type==='melee'){meleeAttack(p);return;}
             if(p.special?.type==='dash'&&p.special.phase==='aim'){
-                // 조준 상태에서 공격키를 누르면 돌진(charging)으로 진입 (이때부터 무적)
                 p.special.phase='charging';
                 p.special.elapsed=0;
                 p.special.x=p.x;
