@@ -118,8 +118,37 @@
         function confirmSelection(id){const buttons=document.querySelectorAll('.ability-list .ability');const card=buttons[selectionIndex[id]];players[id].selected=!players[id].selected;card.classList.toggle('selected-'+id,players[id].selected);card.querySelector('.selection-tag.'+id).style.display=players[id].selected?'block':'none';const status=document.getElementById('select-status-'+id);status.textContent=players[id].selected?id.toUpperCase()+' 확정':id.toUpperCase()+' 선택 중';status.classList.toggle('ready',players[id].selected);if(players.p1.selected&&players.p2.selected)startGame();}
         function reset(){players.p1.x=150;players.p1.y=H/2;players.p1.hp=100;players.p1.lastShot=0;players.p1.ultCooldown=0;players.p1.special=null;players.p1.selected=false;players.p2.x=W-150;players.p2.y=H/2;players.p2.hp=100;players.p2.ultCooldown=0;players.p2.special=null;players.p2.selected=false;bullets.length=0;trails.length=0;effects.length=0;cannons.length=0;running=false;document.getElementById('overlay').classList.remove('show');document.getElementById('select-screen').classList.remove('hidden');updateHealth();}
         function startGame(){if(!players.p1.ability||!players.p2.ability)return;players.p1.color=players.p1.baseColor;players.p2.color=players.p2.baseColor;running=true;document.getElementById('select-screen').classList.add('hidden');}
-        document.addEventListener('keydown',e=>{const key=e.key.toLowerCase();keys.add(key);if([' ','arrowup','arrowdown','arrowleft','arrowright','enter','+','=','\\'].includes(key))e.preventDefault();if(!e.repeat&&!running&&players.p1&&players.p2){if(!players.p1.selected&&['a','d','w','s'].includes(key))navigateSelection('p1',key==='a'||key==='w'?'left':'right');if(!players.p2.selected&&players.p2.controls.includes(key))navigateSelection('p2',key==='l'||key==='p'?'left':'right');if(key===players.p1.fire)confirmSelection('p1');if(key===players.p2.fire)confirmSelection('p2');}else if(!e.repeat&&running){if(key===players.p1.ult)activate(players.p1);else if(key===players.p2.ult)activate(players.p2);else if(key===players.p1.fire&&!(players.p1.special?.type==='sniper'&&players.p1.special.ready>0))shoot(players.p1,performance.now());else if(key===players.p2.fire&&!(players.p2.special?.type==='sniper'&&players.p2.special.ready>0))shoot(players.p2,performance.now());}});
-        document.addEventListener('keyup',e=>keys.delete(e.key.toLowerCase()));
+        
+        // 조작감 개선: keydown/keyup 시 정확한 상태 반영 및 키 누름 중복 방지 이슈 해결
+        window.addEventListener('keydown', e => {
+            const key = e.key.toLowerCase();
+            keys.add(key);
+            if([' ','arrowup','arrowdown','arrowleft','arrowright','enter','+','=','\\'].includes(key)) e.preventDefault();
+            
+            if(!running && players.p1 && players.p2){
+                if(!e.repeat){
+                    if(!players.p1.selected && ['a','d','w','s'].includes(key)) navigateSelection('p1', key==='a'||key==='w'?'left':'right');
+                    if(!players.p2.selected && players.p2.controls.includes(key)) navigateSelection('p2', key==='l'||key==='p'?'left':'right');
+                    if(key === players.p1.fire) confirmSelection('p1');
+                    if(key === players.p2.fire) confirmSelection('p2');
+                }
+            } else if(running){
+                if(!e.repeat){
+                    if(key === players.p1.ult) activate(players.p1);
+                    else if(key === players.p2.ult) activate(players.p2);
+                    else if(key === players.p1.fire && !(players.p1.special?.type==='sniper' && players.p1.special.ready>0)) shoot(players.p1, performance.now());
+                    else if(key === players.p2.fire && !(players.p2.special?.type==='sniper' && players.p2.special.ready>0)) shoot(players.p2, performance.now());
+                }
+            }
+        });
+        
+        window.addEventListener('keyup', e => {
+            keys.delete(e.key.toLowerCase());
+        });
+        
+        // 창을 벗어나거나 포커스를 잃었을 때 키가 멈추는 현상 방지
+        window.addEventListener('blur', () => keys.clear());
+
         document.getElementById('restart').addEventListener('click',()=>{reset();document.querySelectorAll('.ability').forEach(item=>{item.classList.remove('selected-p1','selected-p2');item.querySelectorAll('.selection-tag').forEach(tag=>tag.style.display='none');});document.getElementById('select-status-p1').textContent='P1 선택 중';document.getElementById('select-status-p2').textContent='P2 선택 중';document.querySelectorAll('.selection-status span').forEach(item=>item.classList.remove('ready'));});makePickers();
         function updateHealth(){for(const [id,p] of Object.entries(players)){document.getElementById('health'+id.slice(1)).style.width=p.hp+'%';document.getElementById('value'+id.slice(1)).textContent=p.hp;document.querySelector('.score.'+id+' .dot')?.style.setProperty('background',p.color);}}
         function updateUltimateStatus(){for(const [id,p] of Object.entries(players)){const status=document.getElementById('ult-status'+id.slice(1));const ready=p.ultCooldown<=0;status.textContent=ready?'ULT READY':'ULT '+Math.ceil(p.ultCooldown)+'s';status.classList.toggle('ready',ready);}}
@@ -180,7 +209,6 @@
             effects.push({type:'melee',x:p.x,y:p.y,color:p.color,life:.22,maxLife:.22,radius});
             shake=Math.max(shake,20);
             
-            // 일반 근접 공격으로 대포 파괴 가능
             for(let i=cannons.length-1; i>=0; i--){
                 if(Math.hypot(p.x-cannons[i].x, p.y-cannons[i].y)<=radius+18){
                     cannons[i].hp -= 50;
@@ -198,7 +226,6 @@
         shoot=(p,now)=>{
             if(p.special?.type==='melee'){meleeAttack(p);return;}
             
-            // 일반 공격으로도 대포 파괴 가능하도록 처리
             let shotHandled = false;
             for(let i=cannons.length-1; i>=0; i--){
                 if(Math.abs(p.x + p.dir*25 - cannons[i].x) < 30 && Math.abs(p.y - cannons[i].y) < 30){
@@ -321,10 +348,9 @@
 
                     trails.push({x:p.x, y:p.y, color:p.color, life:.35, maxLife:.35});
                     
-                    // 돌진 중 대포(포격 설치물) 파괴 로직 추가
                     for(let i=cannons.length-1; i>=0; i--){
                         if(Math.hypot(p.x - cannons[i].x, p.y - cannons[i].y) < 40){
-                            cannons[i].hp -= 50; // 한 방에 파괴
+                            cannons[i].hp -= 50;
                             shake = 60;
                             effects.push({type:'explosion', x:cannons[i].x, y:cannons[i].y, color:'#ff9f43', life:.3, maxLife:.3, radius:50});
                         }
@@ -343,10 +369,21 @@
                         p.special.hitCooldown = .3;
                     }
                 } else {
-                    if(keys.has(l))p.x-=speed*dt;
-                    if(keys.has(r))p.x+=speed*dt;
-                    if(keys.has(u))p.y-=speed*dt;
-                    if(keys.has(d))p.y+=speed*dt;
+                    // 키 입력 감지 개선: 양방향 동시 입력 시 상쇄 처리하여 멈춤 현상 해소
+                    let moveX = 0, moveY = 0;
+                    if(keys.has(l)) moveX -= 1;
+                    if(keys.has(r)) moveX += 1;
+                    if(keys.has(u)) moveY -= 1;
+                    if(keys.has(d)) moveY += 1;
+
+                    if(moveX !== 0 && moveY !== 0) {
+                        moveX *= 0.7071;
+                        moveY *= 0.7071;
+                    }
+
+                    p.x += moveX * speed * dt;
+                    p.y += moveY * speed * dt;
+
                     const minX=p.special?.type==='melee'?35:(p===players.p1?35:wall+35);
                     const maxX=p.special?.type==='melee'?W-35:(p===players.p1?wall-35:W-35);
                     p.x=clamp(p.x,minX,maxX);
@@ -405,7 +442,6 @@
                     continue;
                 }
                 
-                // 총알이 대포를 맞췄을 때 대포 체력 깎이기
                 let bulletHitCannon = false;
                 for(let j=cannons.length-1; j>=0; j--){
                     if(Math.abs(b.x - cannons[j].x) < 20 && Math.abs(b.y - cannons[j].y) < 20){
