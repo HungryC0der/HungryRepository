@@ -90,7 +90,6 @@
         const MAX_BULLETS=100, MAX_TRAILS=90, MAX_EFFECTS=100;
         let last=performance.now(), running=false, shake=0, camera={x:W/2,y:H/2,zoom:1};
         
-        // 요구하신 능력 이름 반영 (근접, 초월, 포격)
         const abilities={
             melee:{name:'근접',color:'#f7e36b',description:'5초 동안 근접 공격 능력을 얻습니다.'},
             transcendence:{name:'초월',color:'#ff5ce1',description:'5초 동안 가속, 관통, 총알 피해 10.'},
@@ -180,6 +179,14 @@
             const radius=78;
             effects.push({type:'melee',x:p.x,y:p.y,color:p.color,life:.22,maxLife:.22,radius});
             shake=Math.max(shake,20);
+            
+            // 일반 근접 공격으로 대포 파괴 가능
+            for(let i=cannons.length-1; i>=0; i--){
+                if(Math.hypot(p.x-cannons[i].x, p.y-cannons[i].y)<=radius+18){
+                    cannons[i].hp -= 50;
+                }
+            }
+
             if(Math.hypot(p.x-target.x,p.y-target.y)<=radius&&(!target.special||!['melee','sniper'].includes(target.special.type))){
                 target.hp=Math.max(0,target.hp-5);
                 updateHealth();
@@ -190,6 +197,19 @@
         const rangedShoot=shoot;
         shoot=(p,now)=>{
             if(p.special?.type==='melee'){meleeAttack(p);return;}
+            
+            // 일반 공격으로도 대포 파괴 가능하도록 처리
+            let shotHandled = false;
+            for(let i=cannons.length-1; i>=0; i--){
+                if(Math.abs(p.x + p.dir*25 - cannons[i].x) < 30 && Math.abs(p.y - cannons[i].y) < 30){
+                    cannons[i].hp -= 50;
+                    shotHandled = true;
+                    shake = Math.max(shake, 20);
+                    break;
+                }
+            }
+            if(shotHandled) return;
+
             if(p.special?.type==='dash'&&p.special.phase==='aim'){
                 p.special.phase='charging';
                 p.special.elapsed=0;
@@ -301,6 +321,15 @@
 
                     trails.push({x:p.x, y:p.y, color:p.color, life:.35, maxLife:.35});
                     
+                    // 돌진 중 대포(포격 설치물) 파괴 로직 추가
+                    for(let i=cannons.length-1; i>=0; i--){
+                        if(Math.hypot(p.x - cannons[i].x, p.y - cannons[i].y) < 40){
+                            cannons[i].hp -= 50; // 한 방에 파괴
+                            shake = 60;
+                            effects.push({type:'explosion', x:cannons[i].x, y:cannons[i].y, color:'#ff9f43', life:.3, maxLife:.3, radius:50});
+                        }
+                    }
+
                     const target = p === players.p1 ? players.p2 : players.p1;
                     p.special.hitCooldown -= dt;
                     if(Math.hypot(p.x - target.x, p.y - target.y) < 45 && p.special.hitCooldown <= 0){
@@ -338,6 +367,11 @@
 
             for(let i=cannons.length-1;i>=0;i--){
                 const cannon=cannons[i];
+                if(cannon.hp <= 0){
+                    effects.push({type:'explosion', x:cannon.x, y:cannon.y, color:'#ff9f43', life:.35, maxLife:.35, radius:60});
+                    cannons.splice(i,1);
+                    continue;
+                }
                 cannon.life-=dt;
                 if(cannon.life<=0){cannons.splice(i,1);continue;}
                 cannon.lastShot-=dt;
@@ -370,6 +404,21 @@
                     }
                     continue;
                 }
+                
+                // 총알이 대포를 맞췄을 때 대포 체력 깎이기
+                let bulletHitCannon = false;
+                for(let j=cannons.length-1; j>=0; j--){
+                    if(Math.abs(b.x - cannons[j].x) < 20 && Math.abs(b.y - cannons[j].y) < 20){
+                        cannons[j].hp -= b.damage;
+                        bulletHitCannon = true;
+                        break;
+                    }
+                }
+                if(bulletHitCannon){
+                    bullets.splice(i,1);
+                    continue;
+                }
+
                 b.x+=(b.vx??b.dir*960)*dt;
                 b.y+=(b.vy??0)*dt;
                 let blocked=false;
