@@ -119,7 +119,6 @@
         function reset(){players.p1.x=150;players.p1.y=H/2;players.p1.hp=100;players.p1.lastShot=0;players.p1.ultCooldown=0;players.p1.special=null;players.p1.selected=false;players.p2.x=W-150;players.p2.y=H/2;players.p2.hp=100;players.p2.ultCooldown=0;players.p2.special=null;players.p2.selected=false;bullets.length=0;trails.length=0;effects.length=0;cannons.length=0;running=false;document.getElementById('overlay').classList.remove('show');document.getElementById('select-screen').classList.remove('hidden');updateHealth();}
         function startGame(){if(!players.p1.ability||!players.p2.ability)return;players.p1.color=players.p1.baseColor;players.p2.color=players.p2.baseColor;running=true;document.getElementById('select-screen').classList.add('hidden');}
         
-        // 조작감 개선: keydown/keyup 시 정확한 상태 반영 및 키 누름 중복 방지 이슈 해결
         window.addEventListener('keydown', e => {
             const key = e.key.toLowerCase();
             keys.add(key);
@@ -136,8 +135,8 @@
                 if(!e.repeat){
                     if(key === players.p1.ult) activate(players.p1);
                     else if(key === players.p2.ult) activate(players.p2);
-                    else if(key === players.p1.fire && !(players.p1.special?.type==='sniper' && players.p1.special.ready>0)) shoot(players.p1, performance.now());
-                    else if(key === players.p2.fire && !(players.p2.special?.type==='sniper' && players.p2.special.ready>0)) shoot(players.p2, performance.now());
+                    else if(key === players.p1.fire) shoot(players.p1, performance.now());
+                    else if(key === players.p2.fire) shoot(players.p2, performance.now());
                 }
             }
         });
@@ -146,7 +145,6 @@
             keys.delete(e.key.toLowerCase());
         });
         
-        // 창을 벗어나거나 포커스를 잃었을 때 키가 멈추는 현상 방지
         window.addEventListener('blur', () => keys.clear());
 
         document.getElementById('restart').addEventListener('click',()=>{reset();document.querySelectorAll('.ability').forEach(item=>{item.classList.remove('selected-p1','selected-p2');item.querySelectorAll('.selection-tag').forEach(tag=>tag.style.display='none');});document.getElementById('select-status-p1').textContent='P1 선택 중';document.getElementById('select-status-p2').textContent='P2 선택 중';document.querySelectorAll('.selection-status span').forEach(item=>item.classList.remove('ready'));});makePickers();
@@ -164,7 +162,7 @@
                 cannons.push({x:p.x,y:p.y,owner:p,hp:50,lastShot:0,life:10});
                 p.special={type:'cannon',time:10};
             }else if(p.ability==='sniper'){
-                p.special={type:'sniper',time:5,ready:.5,alpha:1,zoom:1,cameraX:players[p===players.p1?'p2':'p1'].x,cameraY:players[p===players.p1?'p2':'p1'].y};
+                p.special={type:'sniper',time:5,ready:0,alpha:1,zoom:1,cameraX:players[p===players.p1?'p2':'p1'].x,cameraY:players[p===players.p1?'p2':'p1'].y};
             }else if(p.ability==='dash'){
                 const startSide = (p === players.p1) ? 'left' : 'right';
                 p.special={type:'dash',phase:'aim',time:5,elapsed:0,angle:p.dir>0?0:Math.PI,x:p.x,y:p.y,vx:0,vy:0,hitCooldown:0, startSide: startSide, hasCrossedCenter: false};
@@ -173,10 +171,19 @@
         }
 
         function shoot(p,now){
+            // [수정] 명사수 상태일 때 공격 키를 누르면 조준 발사가 올바르게 작동하도록 개선
             if(p.special?.type==='sniper'){
                 const target=p===players.p1?players.p2:players.p1;
-                const aligned=Math.hypot(target.x-p.special.cameraX,target.y-p.special.cameraY)<30;
-                if(aligned){target.hp=Math.max(0,target.hp-50);shake=70;updateHealth();if(target.hp===0)end(p===players.p1?'P1 WINS':'P2 WINS');}
+                const aligned=Math.hypot(target.x-p.special.cameraX,target.y-p.special.cameraY)<45; // 판정 범위를 살짝 넓혀서 맞추기 쉽게 조정
+                if(aligned){
+                    target.hp=Math.max(0,target.hp-50);
+                    shake=70;
+                    updateHealth();
+                    effects.push({type:'explosion',x:target.x,y:target.y,color:p.color,life:.4,maxLife:.4,radius:70});
+                    if(target.hp===0)end(p===players.p1?'P1 WINS':'P2 WINS');
+                } else {
+                    shake=25; // 빗나갔을 때 피드백
+                }
                 p.special=null;p.color=p.baseColor;return;
             }
             if(bullets.length>=MAX_BULLETS)return;
@@ -225,6 +232,7 @@
         const rangedShoot=shoot;
         shoot=(p,now)=>{
             if(p.special?.type==='melee'){meleeAttack(p);return;}
+            if(p.special?.type==='sniper'){rangedShoot(p,now);return;} // 명사수 발사 처리 위임
             
             let shotHandled = false;
             for(let i=cannons.length-1; i>=0; i--){
@@ -369,7 +377,6 @@
                         p.special.hitCooldown = .3;
                     }
                 } else {
-                    // 키 입력 감지 개선: 양방향 동시 입력 시 상쇄 처리하여 멈춤 현상 해소
                     let moveX = 0, moveY = 0;
                     if(keys.has(l)) moveX -= 1;
                     if(keys.has(r)) moveX += 1;
