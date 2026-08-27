@@ -180,7 +180,8 @@
                 p.special={type:'sniper',time:5,ready:0,alpha:1,zoom:1,cameraX:players[p===players.p1?'p2':'p1'].x,cameraY:players[p===players.p1?'p2':'p1'].y};
             }else if(p.ability==='dash'){
                 const startSide = (p === players.p1) ? 'left' : 'right';
-                p.special={type:'dash',phase:'aim',time:5,elapsed:0,angle:p.dir>0?0:Math.PI,x:p.x,y:p.y,vx:0,vy:0,hitCooldown:0, startSide: startSide, hasCrossedCenter: false};
+                const target= p === players.p1 ? players.p2 : players.p1;
+                p.special={type:'dash',phase:'aim',time:5,elapsed:0,angle:p.dir>0?0:Math.PI,x:p.x,y:p.y,vx:0,vy:0,hitCooldown:0, startSide:startSide, arenaCenterX:target.x, arenaCenterY:target.y, hasEnteredArena:false};
             }
             effects.push({type:'burst',x:p.x,y:p.y,color:p.color,life:.5,maxLife:.5});
         }
@@ -348,13 +349,17 @@
                     }
 
                     let wallHit = false;
-                    const arenaCenterX = p.special.startSide === 'left' ? wall / 2 : wall + wall / 2;
-                    const arenaCenterY = H / 2;
+                    const arenaCenterX = p.special.arenaCenterX;
+                    const arenaCenterY = p.special.arenaCenterY;
                     const distanceX = p.x - arenaCenterX;
                     const distanceY = p.y - arenaCenterY;
                     const distance = Math.hypot(distanceX, distanceY);
 
-                    if (distance > dashArenaRadius) {
+                    if (!p.special.hasEnteredArena && distance <= dashArenaRadius) {
+                        p.special.hasEnteredArena = true;
+                    }
+
+                    if (p.special.hasEnteredArena && distance > dashArenaRadius) {
                         const normalX = distanceX / distance;
                         const normalY = distanceY / distance;
                         p.x = arenaCenterX + normalX * dashArenaRadius;
@@ -539,7 +544,6 @@
         function drawDashArenaWalls(){
             for(const p of Object.values(players)){
                 if(p.special?.type!=='dash')continue;
-                const centerX=p.special.startSide==='left'?wall/2:wall+wall/2;
                 ctx.save();
                 ctx.strokeStyle=p.color;
                 ctx.shadowColor=p.color;
@@ -547,7 +551,7 @@
                 ctx.globalAlpha=.85;
                 ctx.lineWidth=4;
                 ctx.beginPath();
-                ctx.arc(centerX,H/2,dashArenaRadius,0,Math.PI*2);
+                ctx.arc(p.special.arenaCenterX,p.special.arenaCenterY,dashArenaRadius,0,Math.PI*2);
                 ctx.stroke();
                 ctx.restore();
             }
