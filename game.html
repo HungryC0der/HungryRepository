@@ -73,7 +73,7 @@
 				<div class="subtitle">두 명의 파일럿, 하나의 경기장.<br>벽은 막지만 총알은 막지 못합니다.</div>
 			</header>
 			<canvas id="arena" width="1100" height="620" aria-label="2인용 대전 게임 화면"></canvas>
-			<div id="select-screen"><div class="select-box"><h2>CHOOSE YOUR EDGE</h2><p>같은 목록에서 각자 능력을 선택하세요 · P1 이동키 + SPACE / P2 이동키 + =</p><div class="pickers"><div class="picker"><h3>SHARED LOADOUT · <span class="p1">P1</span> / <span class="p2">P2</span></h3><div class="ability-list"></div></div></div><button id="start-game">ENTER ARENA</button></div></div>
+			<div id="select-screen"><div class="select-box"><h2>CHOOSE YOUR EDGE</h2><p>같은 목록에서 각자 능력을 선택하세요 · P1 필살기 C / P2 필살기 \</p><div class="pickers"><div class="picker"><h3>SHARED LOADOUT · <span class="p1">P1</span> / <span class="p2">P2</span></h3><div class="ability-list"></div></div></div><button id="start-game">ENTER ARENA</button></div></div>
 			<div id="overlay"><div class="result"><small>MATCH COMPLETE</small><h2 id="winner">P1 WINS</h2><button id="restart">REMATCH ↵</button></div></div>
 		</div>
 		<div class="instructions">
@@ -92,7 +92,7 @@
 			cannon:{name:'대포',color:'#ff9f43',description:'위치에 10초 대포를 설치해 자동 발사합니다.'},
 			sniper:{name:'명사수',color:'#b78cff',description:'투명화, 확대 조준. 정확히 맞추면 50 피해.'}
 		};
-		const players={p1:{x:150,y:H/2,color:'#ff734d',baseColor:'#ff734d',hp:100,fire:' ',ult:'m',controls:['a','d','w','s'],dir:1,ability:null},p2:{x:W-150,y:H/2,color:'#55d6ce',baseColor:'#55d6ce',hp:100,fire:'=',ult:'\\',controls:['l',"'",'p',';'],dir:-1,ability:null}};
+		const players={p1:{x:150,y:H/2,color:'#ff734d',baseColor:'#ff734d',hp:100,fire:' ',ult:'c',controls:['a','d','w','s'],dir:1,ability:null},p2:{x:W-150,y:H/2,color:'#55d6ce',baseColor:'#55d6ce',hp:100,fire:'=',ult:'\\',controls:['l',"'",'p',';'],dir:-1,ability:null}};
 		const selectionIndex={p1:0,p2:0};
 		const clamp=(n,min,max)=>Math.max(min,Math.min(max,n));
 		function makePickers(){const box=document.querySelector('.ability-list');for(const [key,a] of Object.entries(abilities)){const button=document.createElement('button');button.className='ability';button.dataset.ability=key;button.innerHTML=`<i class="ability-icon">${key==='invincible'?'◇':key==='awakening'?'ϟ':key==='cannon'?'▰':'⊙'}</i><strong>${a.name}</strong><span>${a.description}</span><em class="selection-tag p1">P1</em><em class="selection-tag p2">P2</em>`;box.appendChild(button);}selectAbility('p1',0);selectAbility('p2',0);}
