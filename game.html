@@ -94,7 +94,7 @@
             awakening:{name:'각성',color:'#ff5ce1',description:'5초 동안 가속, 관통, 총알 피해 10.'},
             cannon:{name:'대포',color:'#ff9f43',description:'위치에 10초 대포를 설치해 자동 발사합니다.'},
             sniper:{name:'명사수',color:'#b78cff',description:'투명화, 확대 조준. 정확히 맞추면 50 피해.'},
-            dash:{name:'돌진',color:'#58a6ff',description:'방향을 정해 박치기로 돌진하며 상대에게 피해를 줍니다.'}
+            dash:{name:'돌진',color:'#58a6ff',description:'5초간 가속/감속(Ease In-Out)의 초고속 박치기 돌진.'}
         };
         const players={p1:{x:150,y:H/2,color:'#ff734d',baseColor:'#ff734d',hp:100,fire:'c',ult:'v',controls:['a','d','w','s'],dir:1,ability:null},p2:{x:W-150,y:H/2,color:'#55d6ce',baseColor:'#55d6ce',hp:100,fire:'=',ult:'\\',controls:['l',"'",'p',';'],dir:-1,ability:null}};
         const selectionIndex={p1:0,p2:0};
@@ -124,7 +124,7 @@
             }else if(p.ability==='sniper'){
                 p.special={type:'sniper',time:5,ready:.5,alpha:1,zoom:1,cameraX:players[p===players.p1?'p2':'p1'].x,cameraY:players[p===players.p1?'p2':'p1'].y};
             }else if(p.ability==='dash'){
-                p.special={type:'dash',phase:'aim',time:99,angle:p.dir>0?0:Math.PI,elapsed:0,hitCooldown:0};
+                p.special={type:'dash',phase:'aim',time:5,elapsed:0,angle:p.dir>0?0:Math.PI,startX:p.x,startY:p.y,hitCooldown:0};
             }
             effects.push({type:'burst',x:p.x,y:p.y,color:p.color,life:.5,maxLife:.5});
         }
@@ -190,6 +190,8 @@
             if(p.special?.type==='dash'&&p.special.phase==='aim'){
                 p.special.phase='charging';
                 p.special.elapsed=0;
+                p.special.startX=p.x;
+                p.special.startY=p.y;
                 return;
             }
             rangedShoot(p,now);
@@ -221,42 +223,55 @@
                     }
                 } else if(p.special?.type==='dash' && p.special.phase==='charging'){
                     p.special.elapsed+=dt;
-                    const dashSpeed=850; // 박치기 돌진 속도
-                    p.x+=Math.cos(p.special.angle)*dashSpeed*dt;
-                    p.y+=Math.sin(p.special.angle)*dashSpeed*dt;
+                    const duration = 5.0; // 5초 지속
+                    let progress = p.special.elapsed / duration;
+                    if(progress >= 1) {
+                        p.special = null;
+                        p.color = p.baseColor;
+                        continue;
+                    }
 
-                    // 벽 충돌 시 튕김
-                    if(p.x<35||p.x>W-35){p.x=clamp(p.x,35,W-35);p.special.angle=Math.PI-p.special.angle;}
-                    if(p.y<35||p.y>H-35){p.y=clamp(p.y,35,H-35);p.special.angle=-p.special.angle;}
+                    // Ease In-Out Cubic 공식 (처음과 끝은 느리고 중간에 최고속도로 질주)
+                    let easeProgress = progress < 0.5 
+                        ? 4 * progress * progress * progress 
+                        : 1 - Math.pow(-2 * progress + 2, 3) / 2;
 
-                    trails.push({x:p.x,y:p.y,color:p.color,life:.3,maxLife:.3});
+                    // 화면 전체를 여러 번 가로지를 수 있는 엄청난 초고속 거리 계산 (최고속도 대폭 상향)
+                    const totalDistance = 2400; 
+                    const currentDist = easeProgress * totalDistance;
+
+                    p.x = p.special.startX + Math.cos(p.special.angle) * currentDist;
+                    p.y = p.special.startY + Math.sin(p.special.angle) * currentDist;
+
+                    // 아레나 벽 충돌 처리 (벽에 부딪히면 튕기도록 반사각 계산)
+                    if(p.x < 35 || p.x > W - 35) {
+                        p.x = clamp(p.x, 35, W - 35);
+                        p.special.angle = Math.PI - p.special.angle;
+                        p.special.startX = p.x;
+                        p.special.startY = p.y;
+                        p.special.elapsed = (1 - progress) * duration; // 잔여 시간 유지
+                    }
+                    if(p.y < 35 || p.y > H - 35) {
+                        p.y = clamp(p.y, 35, H - 35);
+                        p.special.angle = -p.special.angle;
+                        p.special.startX = p.x;
+                        p.special.startY = p.y;
+                        p.special.elapsed = (1 - progress) * duration;
+                    }
+
+                    trails.push({x:p.x, y:p.y, color:p.color, life:.35, maxLife:.35});
                     
-                    const target=p===players.p1?players.p2:players.p1;
-                    p.special.hitCooldown-=dt;
-                    if(Math.hypot(p.x-target.x,p.y-target.y)<40&&p.special.hitCooldown<=0){
-                        if(!target.special||!['invincible','sniper'].includes(target.special.type)){
-                            target.hp=Math.max(0,target.hp-15);
+                    const target = p === players.p1 ? players.p2 : players.p1;
+                    p.special.hitCooldown -= dt;
+                    if(Math.hypot(p.x - target.x, p.y - target.y) < 45 && p.special.hitCooldown <= 0){
+                        if(!target.special || !['invincible', 'sniper'].includes(target.special.type)){
+                            target.hp = Math.max(0, target.hp - 20);
                             updateHealth();
-                            shake=40;
-                            if(target.hp===0)end(p===players.p1?'P1 WINS':'P2 WINS');
+                            shake = 50;
+                            if(target.hp === 0) end(p === players.p1 ? 'P1 WINS' : 'P2 WINS');
                         }
-                        p.special.hitCooldown=.4;
+                        p.special.hitCooldown = .3;
                     }
-
-                    // 1.2초 동안 돌진 후 원래 자리나 중단
-                    if(p.special.elapsed>=1.2){
-                        p.special.phase='return';
-                        p.special.returnTime=0;
-                        p.special.returnX=p.x;
-                        p.special.returnY=p.y;
-                    }
-                } else if(p.special?.type==='dash' && p.special.phase==='return'){
-                    p.special.returnTime+=dt;
-                    const progress=Math.min(p.special.returnTime/.4,1);
-                    const homeX=p===players.p1?150:W-150;
-                    p.x=p.special.returnX+(homeX-p.special.returnX)*progress;
-                    p.y=p.special.returnY+(H/2-p.special.returnY)*progress;
-                    if(progress>=1){p.special=null;p.color=p.baseColor;}
                 } else {
                     if(keys.has(l))p.x-=speed*dt;
                     if(keys.has(r))p.x+=speed*dt;
