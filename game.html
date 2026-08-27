@@ -98,7 +98,11 @@
             dash:{name:'돌진',color:'#58a6ff',description:'시전 후 각도 조절, 돌진 중 무적 및 데미지 20 (쿨타임 20초)'}
         };
 
-        const players={p1:{x:150,y:H/2,color:'#ff734d',baseColor:'#ff734d',hp:100,fire:'c',ult:'v',controls:['a','d','w','s'],dir:1,ability:null},p2:{x:W-150,y:H/2,color:'#55d6ce',baseColor:'#55d6ce',hp:100,fire:'=',ult:'\\',controls:['l',"'",'p',';'],dir:-1,ability:null}};
+        // [관성을 위한 속도 벡터(vx, vy) 속성 추가]
+        const players={
+            p1:{x:150,y:H/2,vx:0,vy:0,color:'#ff734d',baseColor:'#ff734d',hp:100,fire:'c',ult:'v',controls:['a','d','w','s'],dir:1,ability:null},
+            p2:{x:W-150,y:H/2,vx:0,vy:0,color:'#55d6ce',baseColor:'#55d6ce',hp:100,fire:'=',ult:'\\',controls:['l',"'",'p',';'],dir:-1,ability:null}
+        };
         const selectionIndex={p1:0,p2:0};
         const clamp=(n,min,max)=>Math.max(min,Math.min(max,n));
         
@@ -116,7 +120,7 @@
         function selectAbility(id,index){const buttons=document.querySelectorAll('.ability-list .ability');selectionIndex[id]=(index+buttons.length)%buttons.length;buttons.forEach(item=>item.classList.remove('focused-'+id));buttons[selectionIndex[id]].classList.add('focused-'+id);players[id].ability=buttons[selectionIndex[id]].dataset.ability;}
         function navigateSelection(id,key){const current=selectionIndex[id];const next=(key==='left'||key==='up'?current-1:current+1);selectAbility(id,next);}
         function confirmSelection(id){const buttons=document.querySelectorAll('.ability-list .ability');const card=buttons[selectionIndex[id]];players[id].selected=!players[id].selected;card.classList.toggle('selected-'+id,players[id].selected);card.querySelector('.selection-tag.'+id).style.display=players[id].selected?'block':'none';const status=document.getElementById('select-status-'+id);status.textContent=players[id].selected?id.toUpperCase()+' 확정':id.toUpperCase()+' 선택 중';status.classList.toggle('ready',players[id].selected);if(players.p1.selected&&players.p2.selected)startGame();}
-        function reset(){players.p1.x=150;players.p1.y=H/2;players.p1.hp=100;players.p1.lastShot=0;players.p1.ultCooldown=0;players.p1.special=null;players.p1.selected=false;players.p2.x=W-150;players.p2.y=H/2;players.p2.hp=100;players.p2.ultCooldown=0;players.p2.special=null;players.p2.selected=false;bullets.length=0;trails.length=0;effects.length=0;cannons.length=0;running=false;document.getElementById('overlay').classList.remove('show');document.getElementById('select-screen').classList.remove('hidden');updateHealth();}
+        function reset(){players.p1.x=150;players.p1.y=H/2;players.p1.vx=0;players.p1.vy=0;players.p1.hp=100;players.p1.lastShot=0;players.p1.ultCooldown=0;players.p1.special=null;players.p1.selected=false;players.p2.x=W-150;players.p2.y=H/2;players.p2.vx=0;players.p2.vy=0;players.p2.hp=100;players.p2.ultCooldown=0;players.p2.special=null;players.p2.selected=false;bullets.length=0;trails.length=0;effects.length=0;cannons.length=0;running=false;document.getElementById('overlay').classList.remove('show');document.getElementById('select-screen').classList.remove('hidden');updateHealth();}
         function startGame(){if(!players.p1.ability||!players.p2.ability)return;players.p1.color=players.p1.baseColor;players.p2.color=players.p2.baseColor;running=true;document.getElementById('select-screen').classList.add('hidden');}
         
         window.addEventListener('keydown', e => {
@@ -156,10 +160,22 @@
             p.ultCooldown=p.ability==='cannon'?20:(p.ability==='dash'?20:10);
             p.color=abilities[p.ability].color;
             updateHealth();
+            
+            shake=Math.max(shake, 35);
+            effects.push({type:'explosion', x:p.x, y:p.y, color:p.color, life:.6, maxLife:.6, radius:110});
+            for(let i=0; i<16; i++) {
+                effects.push({type:'spark', x:p.x, y:p.y, vx:(Math.random()-.5)*400, vy:(Math.random()-.5)*400, life:.5, maxLife:.5, radius:3+Math.random()*4, color:p.color});
+            }
+
             if(p.ability==='melee'||p.ability==='transcendence'){
                 p.special={type:p.ability,time:5};
             }else if(p.ability==='cannon'){
                 cannons.push({x:p.x,y:p.y,owner:p,hp:50,lastShot:0,life:10});
+                shake=Math.max(shake, 50);
+                effects.push({type:'explosion', x:p.x, y:p.y, color:'#ff9f43', life:.5, maxLife:.5, radius:130});
+                for(let i=0; i<12; i++) {
+                    effects.push({type:'spark', x:p.x, y:p.y, vx:(Math.random()-.5)*450, vy:(Math.random()-.5)*450, life:.4, maxLife:.4, radius:4, color:'#ff9f43'});
+                }
                 p.special={type:'cannon',time:10};
             }else if(p.ability==='sniper'){
                 p.special={type:'sniper',time:5,ready:0,alpha:1,zoom:1,cameraX:players[p===players.p1?'p2':'p1'].x,cameraY:players[p===players.p1?'p2':'p1'].y};
@@ -171,30 +187,37 @@
         }
 
         function shoot(p,now){
-            // [수정] 명사수 상태일 때 공격 키를 누르면 조준 발사가 올바르게 작동하도록 개선
             if(p.special?.type==='sniper'){
                 const target=p===players.p1?players.p2:players.p1;
-                const aligned=Math.hypot(target.x-p.special.cameraX,target.y-p.special.cameraY)<45; // 판정 범위를 살짝 넓혀서 맞추기 쉽게 조정
+                const aligned=Math.hypot(target.x-p.special.cameraX,target.y-p.special.cameraY)<50;
+                
                 if(aligned){
                     target.hp=Math.max(0,target.hp-50);
-                    shake=70;
+                    shake=110;
                     updateHealth();
-                    effects.push({type:'explosion',x:target.x,y:target.y,color:p.color,life:.4,maxLife:.4,radius:70});
+                    
+                    effects.push({type:'explosion', x:target.x, y:target.y, color:'#b78cff', life:.6, maxLife:.6, radius:160});
+                    effects.push({type:'explosion', x:target.x, y:target.y, color:'#ffffff', life:.3, maxLife:.3, radius:80});
+                    for(let i=0; i<25; i++) {
+                        effects.push({type:'spark', x:target.x, y:target.y, vx:(Math.random()-.5)*650, vy:(Math.random()-.5)*650, life:.6, maxLife:.6, radius:3+Math.random()*5, color:'#b78cff'});
+                    }
                     if(target.hp===0)end(p===players.p1?'P1 WINS':'P2 WINS');
                 } else {
-                    shake=25; // 빗나갔을 때 피드백
+                    shake=35;
+                    effects.push({type:'explosion', x:p.special.cameraX, y:p.special.cameraY, color:'#b78cff', life:.25, maxLife:.25, radius:40});
                 }
                 p.special=null;p.color=p.baseColor;return;
             }
             if(bullets.length>=MAX_BULLETS)return;
             const piercing=p.special?.type==='transcendence';
             const damage=piercing?10:5;
-            shake=Math.max(shake,28);
+            shake=Math.max(shake, piercing ? 45 : 28);
             const x=p.x+p.dir*27;
+            
             bullets.push({x,y:p.y,dir:p.dir,color:piercing?'rgba(0,0,0,0)':p.color,damage,piercing,size:piercing?24:14,owner:p});
             if(effects.length<MAX_EFFECTS){
-                effects.push({type:'flash',x,y:p.y,dir:p.dir,color:p.color,life:.12,maxLife:.12});
-                for(let i=0;i<4;i++)effects.push({type:'spark',x,y:p.y,vx:p.dir*(90+Math.random()*180),vy:(Math.random()-.5)*180,life:.3,maxLife:.4,radius:2+Math.random()*3,color:p.color});
+                effects.push({type:'flash',x,y:p.y,dir:p.dir,color:p.color,life:.15,maxLife:.15});
+                for(let i=0;i<(piercing?8:4);i++) effects.push({type:'spark',x,y:p.y,vx:p.dir*(120+Math.random()*200),vy:(Math.random()-.5)*200,life:.35,maxLife:.35,radius:2+Math.random()*4,color:p.color});
             }
         }
 
@@ -212,9 +235,14 @@
 
         function meleeAttack(p){
             const target=p===players.p1?players.p2:players.p1;
-            const radius=78;
-            effects.push({type:'melee',x:p.x,y:p.y,color:p.color,life:.22,maxLife:.22,radius});
-            shake=Math.max(shake,20);
+            const radius=85;
+            
+            shake=Math.max(shake, 45);
+            effects.push({type:'melee',x:p.x,y:p.y,color:p.color,life:.35,maxLife:.35,radius});
+            effects.push({type:'explosion',x:p.x,y:p.y,color:'#f7e36b',life:.3,maxLife:.3,radius:90});
+            for(let i=0; i<14; i++) {
+                effects.push({type:'spark', x:p.x, y:p.y, vx:(Math.random()-.5)*400, vy:(Math.random()-.5)*400, life:.35, maxLife:.35, radius:3+Math.random()*3, color:'#f7e36b'});
+            }
             
             for(let i=cannons.length-1; i>=0; i--){
                 if(Math.hypot(p.x-cannons[i].x, p.y-cannons[i].y)<=radius+18){
@@ -225,6 +253,8 @@
             if(Math.hypot(p.x-target.x,p.y-target.y)<=radius&&(!target.special||!['melee','sniper'].includes(target.special.type))){
                 target.hp=Math.max(0,target.hp-5);
                 updateHealth();
+                shake=70;
+                effects.push({type:'explosion', x:target.x, y:target.y, color:'#f7e36b', life:.35, maxLife:.35, radius:75});
                 if(target.hp===0)end(p===players.p1?'P1 WINS':'P2 WINS');
             }
         }
@@ -232,7 +262,7 @@
         const rangedShoot=shoot;
         shoot=(p,now)=>{
             if(p.special?.type==='melee'){meleeAttack(p);return;}
-            if(p.special?.type==='sniper'){rangedShoot(p,now);return;} // 명사수 발사 처리 위임
+            if(p.special?.type==='sniper'){rangedShoot(p,now);return;}
             
             let shotHandled = false;
             for(let i=cannons.length-1; i>=0; i--){
@@ -260,9 +290,13 @@
 
         function update(dt,now){
             for(const p of Object.values(players)){
-                const oldX=p.x,oldY=p.y,speed=p.special?.type==='transcendence'?520:320;
+                const oldX=p.x,oldY=p.y,maxSpeed=p.special?.type==='transcendence'?520:320;
                 const [l,r,u,d]=p.controls;
                 
+                if(p.special?.type==='transcendence' && Math.random()<0.4){
+                    effects.push({type:'spark', x:p.x + (Math.random()-.5)*30, y:p.y + (Math.random()-.5)*30, vx:(Math.random()-.5)*100, vy:(Math.random()-.5)*100, life:.3, maxLife:.3, radius:3, color:'#ff5ce1'});
+                }
+
                 if(p.special?.type==='sniper'){
                     if(keys.has(l))p.special.cameraX-=220*dt;
                     if(keys.has(r))p.special.cameraX+=220*dt;
@@ -377,6 +411,7 @@
                         p.special.hitCooldown = .3;
                     }
                 } else {
+                    // [관성 이동 물리 적용]
                     let moveX = 0, moveY = 0;
                     if(keys.has(l)) moveX -= 1;
                     if(keys.has(r)) moveX += 1;
@@ -388,13 +423,42 @@
                         moveY *= 0.7071;
                     }
 
-                    p.x += moveX * speed * dt;
-                    p.y += moveY * speed * dt;
+                    // 가속도 및 감속(관성) 계산
+                    const acceleration = 2500; // 가속 세기
+                    const friction = 12;      // 멈출 때 미끄러지는 정도 (낮을수록 더 미끄러짐)
+
+                    if (moveX !== 0) {
+                        p.vx += moveX * acceleration * dt;
+                    } else {
+                        p.vx -= p.vx * friction * dt; // 키를 떼면 서서히 감속
+                    }
+
+                    if (moveY !== 0) {
+                        p.vy += moveY * acceleration * dt;
+                    } else {
+                        p.vy -= p.vy * friction * dt; // 키를 떼면 서서히 감속
+                    }
+
+                    // 최대 속도 제한
+                    p.vx = clamp(p.vx, -maxSpeed, maxSpeed);
+                    p.vy = clamp(p.vy, -maxSpeed, maxSpeed);
+
+                    p.x += p.vx * dt;
+                    p.y += p.vy * dt;
 
                     const minX=p.special?.type==='melee'?35:(p===players.p1?35:wall+35);
                     const maxX=p.special?.type==='melee'?W-35:(p===players.p1?wall-35:W-35);
-                    p.x=clamp(p.x,minX,maxX);
-                    p.y=clamp(p.y,35,H-35);
+                    
+                    // 벽에 부딪힐 때 관성 반사
+                    if(p.x <= minX || p.x >= maxX) {
+                        p.x = clamp(p.x, minX, maxX);
+                        p.vx = -p.vx * 0.2; // 벽에 부딪히면 살짝 튕김
+                    }
+                    if(p.y <= 35 || p.y >= H - 35) {
+                        p.y = clamp(p.y, 35, H - 35);
+                        p.vy = -p.vy * 0.2;
+                    }
+
                     if(Math.abs(p.x-oldX)+Math.abs(p.y-oldY)>.1)trails.push({x:oldX,y:oldY,color:p.color,life:.28,maxLife:.28});
                 }
 
@@ -513,15 +577,16 @@
                 ctx.globalAlpha=1;
             }
             for(const cannon of cannons){
-                ctx.fillStyle='#ff9f43';ctx.shadowColor='#ff9f43';ctx.shadowBlur=6;
+                ctx.fillStyle='#ff9f43';ctx.shadowColor='#ff9f43';ctx.shadowBlur=12;
                 ctx.beginPath();ctx.arc(cannon.x,cannon.y,18,0,Math.PI*2);ctx.fill();
                 ctx.fillRect(cannon.x-7,cannon.y-28,14,35);ctx.shadowBlur=0;
             }
             for(const effect of effects){
                 const opacity=effect.life/effect.maxLife;
-                ctx.globalAlpha=opacity;ctx.fillStyle=effect.color;ctx.shadowColor=effect.color;ctx.shadowBlur=effect.type==='flash'?10:4;
-                if(effect.type==='flash'||effect.type==='burst'){ctx.beginPath();ctx.arc(effect.x,effect.y,18+opacity*18,0,Math.PI*2);ctx.fill();}
-                else if(effect.type==='explosion'){ctx.lineWidth=6;ctx.beginPath();ctx.arc(effect.x,effect.y,effect.radius*(1-opacity*.35),0,Math.PI*2);ctx.stroke();ctx.beginPath();ctx.arc(effect.x,effect.y,24*opacity,0,Math.PI*2);ctx.fill();}
+                ctx.globalAlpha=opacity;ctx.fillStyle=effect.color;ctx.shadowColor=effect.color;ctx.shadowBlur=effect.type==='flash'?10:6;
+                if(effect.type==='flash'||effect.type==='burst'){ctx.beginPath();ctx.arc(effect.x,effect.y,18+opacity*24,0,Math.PI*2);ctx.fill();}
+                else if(effect.type==='explosion'){ctx.lineWidth=7;ctx.beginPath();ctx.arc(effect.x,effect.y,effect.radius*(1-opacity*.3),0,Math.PI*2);ctx.stroke();ctx.beginPath();ctx.arc(effect.x,effect.y,30*opacity,0,Math.PI*2);ctx.fill();}
+                else if(effect.type==='melee'){ctx.lineWidth=5;ctx.beginPath();ctx.arc(effect.x,effect.y,effect.radius*(1-opacity),0,Math.PI*2);ctx.stroke();ctx.globalAlpha=opacity*0.4;ctx.beginPath();ctx.arc(effect.x,effect.y,effect.radius,0,Math.PI*2);ctx.fill();}
                 else{ctx.beginPath();ctx.arc(effect.x,effect.y,effect.radius*opacity,0,Math.PI*2);ctx.fill();}
                 ctx.shadowBlur=0;ctx.globalAlpha=1;
             }
@@ -541,7 +606,7 @@
                 ctx.save();
                 ctx.globalAlpha=p.special?.type==='sniper'?p.special.alpha:1;
                 ctx.translate(p.x,p.y);
-                ctx.fillStyle=p.color;ctx.shadowColor=p.color;ctx.shadowBlur=8;
+                ctx.fillStyle=p.color;ctx.shadowColor=p.color;ctx.shadowBlur=12;
                 ctx.beginPath();ctx.arc(0,0,22,0,Math.PI*2);ctx.fill();
                 ctx.shadowBlur=0;ctx.fillStyle='#101615';
                 ctx.beginPath();ctx.arc(p.dir*7,-6,4,0,Math.PI*2);ctx.fill();
@@ -553,8 +618,8 @@
             
             if(sniper){
                 ctx.save();
-                ctx.strokeStyle=abilities.sniper.color;ctx.shadowColor=abilities.sniper.color;ctx.shadowBlur=6;ctx.lineWidth=2;
-                ctx.beginPath();ctx.moveTo(W/2-35,H/2);ctx.lineTo(W/2+35,H/2);ctx.moveTo(W/2,H/2-35);ctx.lineTo(W/2,H/2+35);ctx.stroke();
+                ctx.strokeStyle=abilities.sniper.color;ctx.shadowColor=abilities.sniper.color;ctx.shadowBlur=10;ctx.lineWidth=2.5;
+                ctx.beginPath();ctx.moveTo(W/2-45,H/2);ctx.lineTo(W/2+45,H/2);ctx.moveTo(W/2,H/2-45);ctx.lineTo(W/2,H/2+45);ctx.stroke();
                 ctx.restore();
             }
         }
@@ -562,10 +627,10 @@
         function drawTranscendenceRounds(){
             for(const b of bullets){
                 if(!b.piercing)continue;
-                ctx.save();ctx.fillStyle='#ff5ce1';ctx.shadowColor='#ff5ce1';ctx.shadowBlur=12;
-                ctx.beginPath();ctx.arc(b.x,b.y,10,0,Math.PI*2);ctx.fill();
+                ctx.save();ctx.fillStyle='#ff5ce1';ctx.shadowColor='#ff5ce1';ctx.shadowBlur=16;
+                ctx.beginPath();ctx.arc(b.x,b.y,12,0,Math.PI*2);ctx.fill();
                 ctx.fillStyle='#fff0ff';ctx.shadowBlur=0;
-                ctx.beginPath();ctx.arc(b.x-3,b.y-3,3,0,Math.PI*2);ctx.fill();
+                ctx.beginPath();ctx.arc(b.x-3,b.y-3,4,0,Math.PI*2);ctx.fill();
                 ctx.restore();
             }
         }
