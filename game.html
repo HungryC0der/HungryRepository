@@ -90,16 +90,31 @@
         const MAX_BULLETS=100, MAX_TRAILS=90, MAX_EFFECTS=100;
         let last=performance.now(), running=false, shake=0, camera={x:W/2,y:H/2,zoom:1};
         const abilities={
-            invincible:{name:'무적',color:'#f7e36b',description:'5초 동안 모든 피해를 무시합니다.'},
-            awakening:{name:'각성',color:'#ff5ce1',description:'5초 동안 가속, 관통, 총알 피해 10.'},
-            cannon:{name:'대포',color:'#ff9f43',description:'위치에 10초 대포를 설치해 자동 발사합니다.'},
-            sniper:{name:'명사수',color:'#b78cff',description:'투명화, 확대 조준. 정확히 맞추면 50 피해.'},
-            dash:{name:'돌진',color:'#58a6ff',description:'5초간 벽 충돌 시 화면 진동+이펙트 (데미지 20, 쿨타임 20초)'}
+            melee:{name:'근접',color:'#f7e36b',description:'5초 동안 무적 및 근접 공격 능력을 얻습니다.'},
+            transcendence:{name:'초월',color:'#ff5ce1',description:'5초 동안 캐릭터가 강력해집니다.'},
+            炮격:{name:'포격',color:'#ff9f43',description:'체력이 있는 대포를 설치합니다.'},
+            sniper:{name:'명사수',color:'#b78cff',description:'조준모드로 전환하여 적을 정확히 조준시 50 데미지를 입힙니다.'},
+            dash:{name:'돌진',color:'#58a6ff',description:'시전 후 각도 조절, 돌진할 수 있습니다.'}
         };
+        // 내부 키 매핑용 치환
+        abilities.cannon = abilities.炮격;
+
         const players={p1:{x:150,y:H/2,color:'#ff734d',baseColor:'#ff734d',hp:100,fire:'c',ult:'v',controls:['a','d','w','s'],dir:1,ability:null},p2:{x:W-150,y:H/2,color:'#55d6ce',baseColor:'#55d6ce',hp:100,fire:'=',ult:'\\',controls:['l',"'",'p',';'],dir:-1,ability:null}};
         const selectionIndex={p1:0,p2:0};
         const clamp=(n,min,max)=>Math.max(min,Math.min(max,n));
-        function makePickers(){const box=document.querySelector('.ability-list');for(const [key,a] of Object.entries(abilities)){const button=document.createElement('button');button.className='ability';button.dataset.ability=key;button.innerHTML=`<i class="ability-icon">${key==='invincible'?'◇':key==='awakening'?'ϟ':key==='cannon'?'▰':key==='sniper'?'⊙':'➜'}</i><strong>${a.name}</strong><span>${a.description}</span><em class="selection-tag p1">P1</em><em class="selection-tag p2">P2</em>`;box.appendChild(button);}selectAbility('p1',0);selectAbility('p2',0);}
+        
+        function makePickers(){
+            const box=document.querySelector('.ability-list');
+            for(const [key,a] of Object.entries(abilities)){
+                if(key==='cannon') continue; // 중복 방지
+                const button=document.createElement('button');
+                button.className='ability';
+                button.dataset.ability=key;
+                button.innerHTML=`<i class="ability-icon">${key==='melee'?'◇':key==='transcendence'?'ϟ':key==='炮격'?'▰':key==='sniper'?'⊙':'➜'}</i><strong>${a.name}</strong><span>${a.description}</span><em class="selection-tag p1">P1</em><em class="selection-tag p2">P2</em>`;
+                box.appendChild(button);
+            }
+            selectAbility('p1',0);selectAbility('p2',0);
+        }
         function selectAbility(id,index){const buttons=document.querySelectorAll('.ability-list .ability');selectionIndex[id]=(index+buttons.length)%buttons.length;buttons.forEach(item=>item.classList.remove('focused-'+id));buttons[selectionIndex[id]].classList.add('focused-'+id);players[id].ability=buttons[selectionIndex[id]].dataset.ability;}
         function navigateSelection(id,key){const current=selectionIndex[id];const next=(key==='left'||key==='up'?current-1:current+1);selectAbility(id,next);}
         function confirmSelection(id){const buttons=document.querySelectorAll('.ability-list .ability');const card=buttons[selectionIndex[id]];players[id].selected=!players[id].selected;card.classList.toggle('selected-'+id,players[id].selected);card.querySelector('.selection-tag.'+id).style.display=players[id].selected?'block':'none';const status=document.getElementById('select-status-'+id);status.textContent=players[id].selected?id.toUpperCase()+' 확정':id.toUpperCase()+' 선택 중';status.classList.toggle('ready',players[id].selected);if(players.p1.selected&&players.p2.selected)startGame();}
@@ -113,19 +128,19 @@
         
         function activate(p){
             if(p.special||p.ultCooldown>0)return;
-            p.ultCooldown=p.ability==='cannon'?20:(p.ability==='dash'?20:10);
+            p.ultCooldown=p.ability==='炮격'?20:(p.ability==='dash'?20:10);
             p.color=abilities[p.ability].color;
             updateHealth();
-            if(p.ability==='invincible'||p.ability==='awakening'){
+            if(p.ability==='melee'||p.ability==='transcendence'){
                 p.special={type:p.ability,time:5};
-            }else if(p.ability==='cannon'){
-                cannons.push({x:p.x,y:p.y,owner:p,hp:50,lastShot:0});
-                p.special={type:'cannon',time:10};
+            }else if(p.ability==='炮격'){
+                cannons.push({x:p.x,y:p.y,owner:p,hp:50,lastShot:0,life:10});
+                p.special={type:'炮격',time:10};
             }else if(p.ability==='sniper'){
                 p.special={type:'sniper',time:5,ready:.5,alpha:1,zoom:1,cameraX:players[p===players.p1?'p2':'p1'].x,cameraY:players[p===players.p1?'p2':'p1'].y};
             }else if(p.ability==='dash'){
-                // 스타트 진영 정보를 기록 (P1은 왼쪽 진영인 'left', P2는 오른쪽 진영인 'right')
                 const startSide = (p === players.p1) ? 'left' : 'right';
+                // 조준 단계(aim): 이때는 데미지를 받음
                 p.special={type:'dash',phase:'aim',time:5,elapsed:0,angle:p.dir>0?0:Math.PI,x:p.x,y:p.y,vx:0,vy:0,hitCooldown:0, startSide: startSide, hasCrossedCenter: false};
             }
             effects.push({type:'burst',x:p.x,y:p.y,color:p.color,life:.5,maxLife:.5});
@@ -139,7 +154,7 @@
                 p.special=null;p.color=p.baseColor;return;
             }
             if(bullets.length>=MAX_BULLETS)return;
-            const piercing=p.special?.type==='awakening';
+            const piercing=p.special?.type==='transcendence';
             const damage=piercing?10:5;
             shake=Math.max(shake,28);
             const x=p.x+p.dir*27;
@@ -151,35 +166,24 @@
         }
 
         function hit(b,p){
-            if(!b.cannon){
-                for(let i=cannons.length-1;i>=0;i--){
-                    const cannon=cannons[i];
-                    if(Math.hypot(b.x-cannon.x,b.y-cannon.y)<25){
-                        cannon.hp-=b.damage;
-                        if(cannon.hp<=0)cannons.splice(i,1);
-                        b.x=b.dir===1?W+100:-100;
-                        return false;
-                    }
-                }
-            }
-            return Math.abs(b.x-p.x)<24&&Math.abs(b.y-p.y)<25;
-        }
-
-        const safeHit=hit;
-        hit=(b,p)=>{
-            if(p.special?.type==='invincible'&&Math.abs(b.x-p.x)<24&&Math.abs(b.y-p.y)<25){
+            // 돌진 중(charging)일 때는 무적 처리 (데미지 받지 않음)
+            if(p.special?.type==='dash' && p.special.phase==='charging'){
                 b.x=b.dir===1?W+100:-100;
                 return false;
             }
-            return safeHit(b,p);
-        };
+            if(p.special?.type==='melee'&&Math.abs(b.x-p.x)<24&&Math.abs(b.y-p.y)<25){
+                b.x=b.dir===1?W+100:-100;
+                return false;
+            }
+            return Math.abs(b.x-p.x)<24&&Math.abs(b.y-p.y)<25;
+        }
 
         function meleeAttack(p){
             const target=p===players.p1?players.p2:players.p1;
             const radius=78;
             effects.push({type:'melee',x:p.x,y:p.y,color:p.color,life:.22,maxLife:.22,radius});
             shake=Math.max(shake,20);
-            if(Math.hypot(p.x-target.x,p.y-target.y)<=radius&&(!target.special||!['invincible','sniper'].includes(target.special.type))){
+            if(Math.hypot(p.x-target.x,p.y-target.y)<=radius&&(!target.special||!['melee','sniper'].includes(target.special.type))){
                 target.hp=Math.max(0,target.hp-5);
                 updateHealth();
                 if(target.hp===0)end(p===players.p1?'P1 WINS':'P2 WINS');
@@ -188,8 +192,9 @@
 
         const rangedShoot=shoot;
         shoot=(p,now)=>{
-            if(p.special?.type==='invincible'){meleeAttack(p);return;}
+            if(p.special?.type==='melee'){meleeAttack(p);return;}
             if(p.special?.type==='dash'&&p.special.phase==='aim'){
+                // 조준 상태에서 공격키를 누르면 돌진(charging)으로 진입 (이때부터 무적)
                 p.special.phase='charging';
                 p.special.elapsed=0;
                 p.special.x=p.x;
@@ -204,7 +209,7 @@
 
         function update(dt,now){
             for(const p of Object.values(players)){
-                const oldX=p.x,oldY=p.y,speed=p.special?.type==='awakening'?520:320;
+                const oldX=p.x,oldY=p.y,speed=p.special?.type==='transcendence'?520:320;
                 const [l,r,u,d]=p.controls;
                 
                 if(p.special?.type==='sniper'){
@@ -250,7 +255,6 @@
                     p.x += p.special.vx * speedFactor * dt;
                     p.y += p.special.vy * speedFactor * dt;
 
-                    // 자기 진영에서 상대 진영으로 처음 넘어갈 때 체크
                     if (!p.special.hasCrossedCenter) {
                         if (p.special.startSide === 'left' && p.x > wall) {
                             p.special.hasCrossedCenter = true;
@@ -259,7 +263,6 @@
                         }
                     }
 
-                    // 벽 충돌 처리 (상대 진영에 들어간 이후부터는 중앙 벽 통과 금지)
                     let wallHit = false;
                     const minAllowedX = 35;
                     const maxAllowedX = W - 35;
@@ -270,17 +273,14 @@
                         wallHit = true;
                     }
 
-                    // 중앙 벽 충돌 로직: 이미 상대 진영으로 넘어간 후라면 중앙 벽(wall)을 뚫지 못하고 튕김
                     if (p.special.hasCrossedCenter) {
                         if (p.special.startSide === 'left') {
-                            // P1(왼쪽 출발): 오른쪽 진영에 들어간 후에는 중앙 벽(wall) 왼쪽으로 못 넘어감 (즉 wall 이상에 갇힘)
                             if (p.x < wall) {
                                 p.x = wall;
                                 p.special.vx = -p.special.vx;
                                 wallHit = true;
                             }
                         } else {
-                            // P2(오른쪽 출발): 왼쪽 진영에 들어간 후에는 중앙 벽(wall) 오른쪽으로 못 넘어감 (즉 wall 이하에 갇힘)
                             if (p.x > wall) {
                                 p.x = wall;
                                 p.special.vx = -p.special.vx;
@@ -308,7 +308,7 @@
                     const target = p === players.p1 ? players.p2 : players.p1;
                     p.special.hitCooldown -= dt;
                     if(Math.hypot(p.x - target.x, p.y - target.y) < 45 && p.special.hitCooldown <= 0){
-                        if(!target.special || !['invincible', 'sniper'].includes(target.special.type)){
+                        if(!target.special || !['melee', 'sniper'].includes(target.special.type)){
                             target.hp = Math.max(0, target.hp - 20);
                             updateHealth();
                             shake = 75;
@@ -322,8 +322,8 @@
                     if(keys.has(r))p.x+=speed*dt;
                     if(keys.has(u))p.y-=speed*dt;
                     if(keys.has(d))p.y+=speed*dt;
-                    const minX=p.special?.type==='invincible'?35:(p===players.p1?35:wall+35);
-                    const maxX=p.special?.type==='invincible'?W-35:(p===players.p1?wall-35:W-35);
+                    const minX=p.special?.type==='melee'?35:(p===players.p1?35:wall+35);
+                    const maxX=p.special?.type==='melee'?W-35:(p===players.p1?wall-35:W-35);
                     p.x=clamp(p.x,minX,maxX);
                     p.y=clamp(p.y,35,H-35);
                     if(Math.abs(p.x-oldX)+Math.abs(p.y-oldY)>.1)trails.push({x:oldX,y:oldY,color:p.color,life:.28,maxLife:.28});
@@ -332,7 +332,7 @@
                 if(p.special&&p.special.type!=='sniper'&&p.special.type!=='dash'){
                     p.special.time-=dt;
                     if(p.special.time<=0){
-                        if(p.special.type==='invincible')p.x=clamp(p.x,p===players.p1?35:wall+35,p===players.p1?wall-35:W-35);
+                        if(p.special.type==='melee')p.x=clamp(p.x,p===players.p1?35:wall+35,p===players.p1?wall-35:W-35);
                         p.special=null;p.color=p.baseColor;
                     }
                 }
@@ -365,7 +365,7 @@
                         if(b.age>=b.fuse){
                             const target=b.owner===players.p1?players.p2:players.p1;
                             const inBlast=Math.hypot(b.x-target.x,b.y-target.y)<90;
-                            const protectedTarget=target.special&&['invincible','sniper'].includes(target.special.type);
+                            const protectedTarget=target.special&&['melee','sniper','dash'].includes(target.special?.type);
                             if(inBlast&&!protectedTarget){target.hp=Math.max(0,target.hp-b.damage*3);updateHealth();if(target.hp===0)end(b.owner===players.p1?'P1 WINS':'P2 WINS');}
                             effects.push({type:'explosion',x:b.x,y:b.y,color:'#ff9f43',life:.35,maxLife:.35,radius:90});
                             shake=Math.max(shake,18);
@@ -388,7 +388,7 @@
                 if(blocked){i=bullets.length;continue;}
                 const target=b.owner===players.p1?players.p2:players.p1;
                 if(hit(b,target)){
-                    if(!target.special||!['invincible','sniper'].includes(target.special.type)){
+                    if(!target.special||!['melee','sniper'].includes(target.special.type)){
                         target.hp=Math.max(0,target.hp-b.damage);updateHealth();
                         if(target.hp===0)end(b.owner===players.p1?'P1 WINS':'P2 WINS');
                     }
@@ -471,7 +471,7 @@
             }
         }
 
-        function drawAwakeningRounds(){
+        function drawTranscendenceRounds(){
             for(const b of bullets){
                 if(!b.piercing)continue;
                 ctx.save();ctx.fillStyle='#ff5ce1';ctx.shadowColor='#ff5ce1';ctx.shadowBlur=12;
@@ -514,7 +514,7 @@
                 try{
                     update(dt,now);
                     draw();
-                    drawAwakeningRounds();
+                    drawTranscendenceRounds();
                     drawDashIndicators();
                     updateUltimateStatus();
                 }catch(err){
