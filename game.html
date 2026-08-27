@@ -37,10 +37,9 @@
 		.ability-list { display:grid; grid-template-columns:repeat(4,minmax(150px,1fr)); gap:7px; }
 		.ability { position:relative; border:1px solid #344541; background:#1b2826; color:var(--ink); text-align:left; padding:10px; cursor:pointer; min-height:112px; }
 		.ability:hover,.ability.selected-p1,.ability.selected-p2 { background:#243532; }
-		.ability.selected-p1 { border-color:var(--orange); box-shadow:inset 0 0 0 2px #ff734d66; opacity:.62; }
-		.ability.selected-p2 { border-color:var(--cyan); box-shadow:inset 0 0 0 2px #55d6ce66; opacity:.62; }
-		.ability.selected-p1.selected-p2 { box-shadow:inset 0 0 0 2px #ff734d, inset 0 0 0 5px #55d6ce; }
-		.ability.selected-p1.selected-p2 { opacity:.48; }
+		.ability.selected-p1 { border-color:var(--orange); background:rgba(255,115,77,.28); box-shadow:inset 0 0 0 2px #ff734d66; opacity:1; }
+		.ability.selected-p2 { border-color:var(--cyan); background:rgba(85,214,206,.28); box-shadow:inset 0 0 0 2px #55d6ce66; opacity:1; }
+		.ability.selected-p1.selected-p2 { background:rgba(85,214,206,.28); box-shadow:inset 0 0 0 2px #ff734d, inset 0 0 0 5px #55d6ce; opacity:1; }
 		.ability strong { display:block; font:700 12px Georgia,serif; margin:7px 0 4px; }
 		.ability span { display:block; color:var(--muted); font:12px/1.45 Georgia, 'Malgun Gothic', sans-serif; font-weight:700; }
 		.ability-icon { display:block; height:35px; color:#effffc; font:28px/35px Georgia,serif; text-shadow:0 0 12px currentColor; }
