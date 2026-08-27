@@ -92,7 +92,7 @@
         
         const abilities={
             melee:{name:'근접',color:'#f7e36b',description:'5초 동안 근접 공격 능력을 얻습니다.'},
-            transcendence:{name:'초월',color:'#ff5ce1',description:'5초 동안 가속, 관통, 총알 피해 10.'},
+            transcendence:{name:'초월',color:'#ff5ce1',description:'5초 동안 가속, 관통, 총알 피해 20.'},
             cannon:{name:'포격',color:'#ff9f43',description:'위치에 포격을 설치해 자동 발사합니다. (영구 지속)'},
             sniper:{name:'명사수',color:'#b78cff',description:'투명화, 확대 조준. 정확히 맞추면 50 피해.'},
             dash:{name:'돌진',color:'#58a6ff',description:'시전 후 각도 조절, 돌진 중 무적 및 데미지 20 (쿨타임 20초)'}
@@ -208,7 +208,7 @@
             }
             if(bullets.length>=MAX_BULLETS)return;
             const piercing=p.special?.type==='transcendence';
-            const damage=piercing?10:5;
+            const damage=piercing?20:5; // 초월탄 데미지 20
             shake=Math.max(shake, piercing ? 45 : 28);
             const x=p.x+p.dir*27;
             
@@ -409,7 +409,6 @@
                         p.special.hitCooldown = .3;
                     }
                 } else {
-                    // [입력 씹힘 방지 개선]: keys.has 상태를 매 프레임 다이렉트로 체크하여 가감속 계산
                     let moveX = 0, moveY = 0;
                     if(keys.has(l)) moveX -= 1;
                     if(keys.has(r)) moveX += 1;
