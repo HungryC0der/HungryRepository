@@ -93,15 +93,14 @@
         const abilities={
             melee:{name:'근접',color:'#f7e36b',description:'5초 동안 근접 공격 능력을 얻습니다.'},
             transcendence:{name:'초월',color:'#ff5ce1',description:'5초 동안 가속, 관통, 총알 피해 10.'},
-            cannon:{name:'포격',color:'#ff9f43',description:'위치에 10초간 포격을 설치해 자동 발사합니다.'},
+            cannon:{name:'포격',color:'#ff9f43',description:'위치에 포격을 설치해 자동 발사합니다. (영구 지속)'},
             sniper:{name:'명사수',color:'#b78cff',description:'투명화, 확대 조준. 정확히 맞추면 50 피해.'},
             dash:{name:'돌진',color:'#58a6ff',description:'시전 후 각도 조절, 돌진 중 무적 및 데미지 20 (쿨타임 20초)'}
         };
 
-        // [관성을 위한 속도 벡터(vx, vy) 속성 추가]
         const players={
             p1:{x:150,y:H/2,vx:0,vy:0,color:'#ff734d',baseColor:'#ff734d',hp:100,fire:'c',ult:'v',controls:['a','d','w','s'],dir:1,ability:null},
-            p2:{x:W-150,y:H/2,vx:0,vy:0,color:'#55d6ce',baseColor:'#55d6ce',hp:100,fire:'=',ult:'\\',controls:['l',"'",'p',';'],dir:-1,ability:null}
+            p2:{x:W-150,y:H/2,vx:0,vy:0,color:'#55d6ce',baseColor:'#55d6ce',hp:100,fire:'=',ult:'\\',controls:['l',"'","p",";"],dir:-1,ability:null}
         };
         const selectionIndex={p1:0,p2:0};
         const clamp=(n,min,max)=>Math.max(min,Math.min(max,n));
@@ -157,7 +156,7 @@
         
         function activate(p){
             if(p.special||p.ultCooldown>0)return;
-            p.ultCooldown=p.ability==='cannon'?20:(p.ability==='dash'?20:10);
+            p.ultCooldown=p.ability==='sniper'?15:(p.ability==='cannon'?20:(p.ability==='dash'?20:10));
             p.color=abilities[p.ability].color;
             updateHealth();
             
@@ -170,13 +169,12 @@
             if(p.ability==='melee'||p.ability==='transcendence'){
                 p.special={type:p.ability,time:5};
             }else if(p.ability==='cannon'){
-                cannons.push({x:p.x,y:p.y,owner:p,hp:50,lastShot:0,life:10});
+                cannons.push({x:p.x,y:p.y,owner:p,hp:50,lastShot:0});
                 shake=Math.max(shake, 50);
                 effects.push({type:'explosion', x:p.x, y:p.y, color:'#ff9f43', life:.5, maxLife:.5, radius:130});
                 for(let i=0; i<12; i++) {
                     effects.push({type:'spark', x:p.x, y:p.y, vx:(Math.random()-.5)*450, vy:(Math.random()-.5)*450, life:.4, maxLife:.4, radius:4, color:'#ff9f43'});
                 }
-                p.special={type:'cannon',time:10};
             }else if(p.ability==='sniper'){
                 p.special={type:'sniper',time:5,ready:0,alpha:1,zoom:1,cameraX:players[p===players.p1?'p2':'p1'].x,cameraY:players[p===players.p1?'p2':'p1'].y};
             }else if(p.ability==='dash'){
@@ -411,7 +409,7 @@
                         p.special.hitCooldown = .3;
                     }
                 } else {
-                    // [관성 이동 물리 적용]
+                    // [입력 씹힘 방지 개선]: keys.has 상태를 매 프레임 다이렉트로 체크하여 가감속 계산
                     let moveX = 0, moveY = 0;
                     if(keys.has(l)) moveX -= 1;
                     if(keys.has(r)) moveX += 1;
@@ -423,23 +421,21 @@
                         moveY *= 0.7071;
                     }
 
-                    // 가속도 및 감속(관성) 계산
-                    const acceleration = 2500; // 가속 세기
-                    const friction = 12;      // 멈출 때 미끄러지는 정도 (낮을수록 더 미끄러짐)
+                    const acceleration = 2500;
+                    const friction = 12;
 
                     if (moveX !== 0) {
                         p.vx += moveX * acceleration * dt;
                     } else {
-                        p.vx -= p.vx * friction * dt; // 키를 떼면 서서히 감속
+                        p.vx -= p.vx * friction * dt;
                     }
 
                     if (moveY !== 0) {
                         p.vy += moveY * acceleration * dt;
                     } else {
-                        p.vy -= p.vy * friction * dt; // 키를 떼면 서서히 감속
+                        p.vy -= p.vy * friction * dt;
                     }
 
-                    // 최대 속도 제한
                     p.vx = clamp(p.vx, -maxSpeed, maxSpeed);
                     p.vy = clamp(p.vy, -maxSpeed, maxSpeed);
 
@@ -449,10 +445,9 @@
                     const minX=p.special?.type==='melee'?35:(p===players.p1?35:wall+35);
                     const maxX=p.special?.type==='melee'?W-35:(p===players.p1?wall-35:W-35);
                     
-                    // 벽에 부딪힐 때 관성 반사
                     if(p.x <= minX || p.x >= maxX) {
                         p.x = clamp(p.x, minX, maxX);
-                        p.vx = -p.vx * 0.2; // 벽에 부딪히면 살짝 튕김
+                        p.vx = -p.vx * 0.2;
                     }
                     if(p.y <= 35 || p.y >= H - 35) {
                         p.y = clamp(p.y, 35, H - 35);
@@ -480,8 +475,6 @@
                     cannons.splice(i,1);
                     continue;
                 }
-                cannon.life-=dt;
-                if(cannon.life<=0){cannons.splice(i,1);continue;}
                 cannon.lastShot-=dt;
                 if(cannon.lastShot<=0){
                     const target=cannon.owner===players.p1?players.p2:players.p1;
