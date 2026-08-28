@@ -99,8 +99,8 @@
         };
 
         const players={
-            p1:{x:150,y:H/2,vx:0,vy:0,color:'#ff734d',baseColor:'#ff734d',hp:100,fire:'c',ult:'v',controls:['a','d','w','s'],dir:1,ability:null},
-            p2:{x:W-150,y:H/2,vx:0,vy:0,color:'#55d6ce',baseColor:'#55d6ce',hp:100,fire:'\\',ult:'enter',controls:['l',"'","p",";"],dir:-1,ability:null}
+            p1:{x:150,y:H/2,vx:0,vy:0,color:'#ff734d',baseColor:'#ff734d',hp:100,fire:'KeyC',ult:'KeyV',controls:['KeyA','KeyD','KeyW','KeyS'],dir:1,ability:null},
+            p2:{x:W-150,y:H/2,vx:0,vy:0,color:'#55d6ce',baseColor:'#55d6ce',hp:100,fire:'Backslash',ult:'Enter',controls:['KeyL',"Quote","KeyP","Semicolon"],dir:-1,ability:null}
         };
         const selectionIndex={p1:0,p2:0};
         const clamp=(n,min,max)=>Math.max(min,Math.min(max,n));
@@ -123,29 +123,29 @@
         function startGame(){if(!players.p1.ability||!players.p2.ability)return;players.p1.color=players.p1.baseColor;players.p2.color=players.p2.baseColor;running=true;document.getElementById('select-screen').classList.add('hidden');}
         
         window.addEventListener('keydown', e => {
-            const key = e.key.toLowerCase();
-            keys.add(key);
-            if([' ','arrowup','arrowdown','arrowleft','arrowright','enter','+','=','\\'].includes(key)) e.preventDefault();
+            const code = e.code;
+            keys.add(code);
+            if(['Space','ArrowUp','ArrowDown','ArrowLeft','ArrowRight','Enter','NumpadAdd','Equal','Backslash'].includes(code)) e.preventDefault();
             
             if(!running && players.p1 && players.p2){
                 if(!e.repeat){
-                    if(!players.p1.selected && ['a','d','w','s'].includes(key)) navigateSelection('p1', key==='a'||key==='w'?'left':'right');
-                    if(!players.p2.selected && players.p2.controls.includes(key)) navigateSelection('p2', key==='l'||key==='p'?'left':'right');
-                    if(key === players.p1.fire) confirmSelection('p1');
-                    if(key === players.p2.fire) confirmSelection('p2');
+                    if(!players.p1.selected && ['KeyA','KeyD','KeyW','KeyS'].includes(code)) navigateSelection('p1', code==='KeyA'||code==='KeyW'?'left':'right');
+                    if(!players.p2.selected && players.p2.controls.includes(code)) navigateSelection('p2', code==='KeyL'||code==='KeyP'?'left':'right');
+                    if(code === players.p1.fire) confirmSelection('p1');
+                    if(code === players.p2.fire) confirmSelection('p2');
                 }
             } else if(running){
                 if(!e.repeat){
-                    if(key === players.p1.ult) activate(players.p1);
-                    else if(key === players.p2.ult) activate(players.p2);
-                    else if(key === players.p1.fire) shoot(players.p1, performance.now());
-                    else if(key === players.p2.fire) shoot(players.p2, performance.now());
+                    if(code === players.p1.ult) activate(players.p1);
+                    else if(code === players.p2.ult) activate(players.p2);
+                    else if(code === players.p1.fire) shoot(players.p1, performance.now());
+                    else if(code === players.p2.fire) shoot(players.p2, performance.now());
                 }
             }
         });
         
         window.addEventListener('keyup', e => {
-            keys.delete(e.key.toLowerCase());
+            keys.delete(e.code);
         });
         
         window.addEventListener('blur', () => keys.clear());
@@ -176,7 +176,7 @@
                     effects.push({type:'spark', x:p.x, y:p.y, vx:(Math.random()-.5)*450, vy:(Math.random()-.5)*450, life:.4, maxLife:.4, radius:4, color:'#ff9f43'});
                 }
             }else if(p.ability==='sniper'){
-                p.special={type:'sniper',time:5,ready:0,alpha:1,zoom:1,cameraX:players[p===players.p1?'p2':'p1'].x,cameraY:players[p===players.p1?'p2':'p1'].y};
+                p.special={type:'sniper',time:5,readyDelay:0.5,alpha:1,zoom:1,cameraX:players[p===players.p1?'p2':'p1'].x,cameraY:players[p===players.p1?'p2':'p1'].y};
             }else if(p.ability==='dash'){
                 const startSide = (p === players.p1) ? 'left' : 'right';
                 p.special={type:'dash',phase:'aim',time:5,elapsed:0,angle:p.dir>0?0:Math.PI,x:p.x,y:p.y,vx:0,vy:0,hitCooldown:0, startSide: startSide, hasCrossedCenter: false};
@@ -186,6 +186,7 @@
 
         function shoot(p,now){
             if(p.special?.type==='sniper'){
+                if(p.special.readyDelay > 0) return; // 0.5초 딜레이 체크
                 const target=p===players.p1?players.p2:players.p1;
                 const aligned=Math.hypot(target.x-p.special.cameraX,target.y-p.special.cameraY)<50;
                 
@@ -296,6 +297,9 @@
                 }
 
                 if(p.special?.type==='sniper'){
+                    if (p.special.readyDelay > 0) {
+                        p.special.readyDelay -= dt;
+                    }
                     if(keys.has(l))p.special.cameraX-=220*dt;
                     if(keys.has(r))p.special.cameraX+=220*dt;
                     if(keys.has(u))p.special.cameraY-=220*dt;
@@ -610,8 +614,15 @@
             
             if(sniper){
                 ctx.save();
-                ctx.strokeStyle=abilities.sniper.color;ctx.shadowColor=abilities.sniper.color;ctx.shadowBlur=10;ctx.lineWidth=2.5;
-                ctx.beginPath();ctx.moveTo(W/2-45,H/2);ctx.lineTo(W/2+45,H/2);ctx.moveTo(W/2,H/2-45);ctx.lineTo(W/2,H/2+45);ctx.stroke();
+                const isReady = sniper.special.readyDelay <= 0;
+                ctx.strokeStyle = isReady ? abilities.sniper.color : '#888888';
+                ctx.shadowColor = isReady ? abilities.sniper.color : 'transparent';
+                ctx.shadowBlur = isReady ? 10 : 0;
+                ctx.lineWidth = 2.5;
+                ctx.beginPath();
+                ctx.moveTo(W/2-45,H/2);ctx.lineTo(W/2+45,H/2);
+                ctx.moveTo(W/2,H/2-45);ctx.lineTo(W/2,H/2+45);
+                ctx.stroke();
                 ctx.restore();
             }
         }
