@@ -91,11 +91,11 @@
         let last=performance.now(), running=false, shake=0, camera={x:W/2,y:H/2,zoom:1};
         
         const abilities={
-            melee:{name:'근접',color:'#f7e36b',description:'5초 동안 근접 공격 능력을 얻습니다.'},
-            transcendence:{name:'초월',color:'#ff5ce1',description:'5초 동안 가속, 관통, 총알 피해 20.'},
-            cannon:{name:'포격',color:'#ff9f43',description:'위치에 포격을 설치해 자동 발사합니다. (영구 지속)'},
-            sniper:{name:'명사수',color:'#b78cff',description:'투명화, 확대 조준. 정확히 맞추면 50 피해.'},
-            dash:{name:'돌진',color:'#58a6ff',description:'시전 후 각도 조절, 돌진 중 무적 및 데미지 20 (쿨타임 20초)'}
+            melee:{name:'근접',color:'#f7e36b',description:'5초 동안 근접 공격 능력을 얻습니다. (쿨타임 15초)'},
+            transcendence:{name:'초월',color:'#ff5ce1',description:'5초 동안 가속, 관통, 총알 피해 20. (쿨타임 15초)'},
+            cannon:{name:'포격',color:'#ff9f43',description:'위치에 포격을 설치해 자동 발사합니다. (쿨타임 15초)'},
+            sniper:{name:'명사수',color:'#b78cff',description:'투명화, 확대 조준. 정확히 맞추면 50 피해. (쿨타임 15초)'},
+            dash:{name:'돌진',color:'#58a6ff',description:'돌진 중 무적, 실시간 조종 가능, 충돌 시 35 피해. (쿨타임 15초)'}
         };
 
         const players={
@@ -155,8 +155,12 @@
         function updateUltimateStatus(){for(const [id,p] of Object.entries(players)){const status=document.getElementById('ult-status'+id.slice(1));const ready=p.ultCooldown<=0;status.textContent=ready?'ULT READY':'ULT '+Math.ceil(p.ultCooldown)+'s';status.classList.toggle('ready',ready);}}
         
         function activate(p){
+            const other = p === players.p1 ? players.p2 : players.p1;
+            if (other.special?.type === 'sniper') {
+                return; // 다른 플레이어가 명사수 사용 중이면 스킬 발동 불가
+            }
             if(p.special||p.ultCooldown>0)return;
-            p.ultCooldown=p.ability==='sniper'?15:(p.ability==='cannon'?20:(p.ability==='dash'?20:10));
+            p.ultCooldown=15; // 모든 스킬 쿨타임 15초로 단일화
             p.color=abilities[p.ability].color;
             updateHealth();
             
@@ -186,7 +190,7 @@
 
         function shoot(p,now){
             if(p.special?.type==='sniper'){
-                if(p.special.readyDelay > 0) return; // 0.5초 딜레이 체크
+                if(p.special.readyDelay > 0) return; 
                 const target=p===players.p1?players.p2:players.p1;
                 const aligned=Math.hypot(target.x-p.special.cameraX,target.y-p.special.cameraY)<50;
                 
@@ -209,7 +213,7 @@
             }
             if(bullets.length>=MAX_BULLETS)return;
             const piercing=p.special?.type==='transcendence';
-            const damage=piercing?20:5; // 초월탄 데미지 20
+            const damage=piercing?20:5; 
             shake=Math.max(shake, piercing ? 45 : 28);
             const x=p.x+p.dir*27;
             
@@ -339,6 +343,18 @@
                         speedFactor = 1.0;
                     }
 
+                    // 돌진 조종 핸들링 (유도 기능)
+                    const dx = (keys.has(r)?1:0)-(keys.has(l)?1:0), dy = (keys.has(d)?1:0)-(keys.has(u)?1:0);
+                    if (dx || dy) {
+                        const targetAngle = Math.atan2(dy, dx);
+                        let delta = targetAngle - Math.atan2(p.special.vy, p.special.vx);
+                        delta = Math.atan2(Math.sin(delta), Math.cos(delta));
+                        const currentAngle = Math.atan2(p.special.vy, p.special.vx) + delta * Math.min(1, dt * 2.8);
+                        const currentSpeed = Math.hypot(p.special.vx, p.special.vy);
+                        p.special.vx = Math.cos(currentAngle) * currentSpeed;
+                        p.special.vy = Math.sin(currentAngle) * currentSpeed;
+                    }
+
                     p.x += p.special.vx * speedFactor * dt;
                     p.y += p.special.vy * speedFactor * dt;
 
@@ -402,9 +418,9 @@
 
                     const target = p === players.p1 ? players.p2 : players.p1;
                     p.special.hitCooldown -= dt;
-                    if(Math.hypot(p.x - target.x, p.y - target.y) < 45 && p.special.hitCooldown <= 0){
+                    if(Math.hypot(p.x - target.x, p.y - target.y) < 65 && p.special.hitCooldown <= 0){
                         if(!target.special || !['melee', 'sniper'].includes(target.special.type)){
-                            target.hp = Math.max(0, target.hp - 20);
+                            target.hp = Math.max(0, target.hp - 35);
                             updateHealth();
                             shake = 75;
                             effects.push({type:'explosion', x:target.x, y:target.y, color:p.color, life:.35, maxLife:.35, radius:80});
